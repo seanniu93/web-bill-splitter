@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { toBlob } from 'html-to-image'
 import type { BillItem, Person, TipMode, TaxTipSplit } from '../../types'
 import { formatCents, parseDollarsToCents } from '../../utils/format'
 import { calculateSplit, getBillSubtotal } from '../../utils/calculations'
@@ -34,6 +35,7 @@ export function Summary({
   onSetTipMode,
   onSetTaxTipSplit,
 }: Props) {
+  const exportRef = useRef<HTMLDivElement>(null)
   const subtotal = getBillSubtotal(items)
 
   // ── Local string state for inputs (synced to parent on blur) ──
@@ -88,10 +90,13 @@ export function Summary({
   )
 
   const grandTotal = subtotal + taxAmount + tipCents
+  const sumOfShares = breakdowns.reduce((sum, bd) => sum + bd.total, 0)
 
   // ── Collapsible person cards (all collapsed by default) ──
 
   const [expandedPeople, setExpandedPeople] = useState<Set<string>>(new Set())
+  const [isExporting, setIsExporting] = useState(false)
+  const [exportError, setExportError] = useState('')
 
   const togglePerson = (name: string) => {
     setExpandedPeople((prev) => {
@@ -114,6 +119,57 @@ export function Summary({
       setExpandedPeople(new Set())
     } else {
       setExpandedPeople(new Set(breakdowns.map((bd) => bd.name)))
+    }
+  }
+
+  const handleSaveImage = async () => {
+    if (!exportRef.current || breakdowns.length === 0) return
+
+    setIsExporting(true)
+    setExportError('')
+
+    try {
+      const blob = await toBlob(exportRef.current, {
+        cacheBust: true,
+        pixelRatio: Math.max(2, Math.min(window.devicePixelRatio || 1, 3)),
+        backgroundColor: getComputedStyle(exportRef.current).backgroundColor,
+      })
+
+      if (!blob) {
+        throw new Error('Could not create image')
+      }
+
+      const fileName = `bill-summary-${new Date().toISOString().slice(0, 10)}.png`
+      const file = new File([blob], fileName, { type: 'image/png' })
+      const shareData = {
+        files: [file],
+        title: 'Bill summary',
+      } as ShareData
+
+      const sharingNavigator = navigator as Navigator & {
+        canShare?: (data?: ShareData) => boolean
+        share?: (data: ShareData) => Promise<void>
+      }
+
+      if (sharingNavigator.canShare?.(shareData) && sharingNavigator.share) {
+        await sharingNavigator.share(shareData)
+        return
+      }
+
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = fileName
+      link.click()
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        return
+      }
+
+      setExportError('Could not save the image.')
+    } finally {
+      setIsExporting(false)
     }
   }
 
@@ -317,10 +373,89 @@ export function Summary({
         <div className={styles.verification}>
           <span>Sum of all shares</span>
           <span>
-            {formatCents(
-              breakdowns.reduce((sum, bd) => sum + bd.total, 0),
-            )}
+            {formatCents(sumOfShares)}
           </span>
+        </div>
+      )}
+
+      {breakdowns.length > 0 && (
+        <div className={styles.exportActions}>
+          <button
+            className={styles.exportBtn}
+            onClick={handleSaveImage}
+            disabled={isExporting}
+          >
+            {isExporting ? 'Preparing image...' : 'Export as image'}
+          </button>
+          {exportError && (
+            <p className={styles.exportError}>{exportError}</p>
+          )}
+        </div>
+      )}
+
+      {breakdowns.length > 0 && (
+        <div className={styles.exportCanvas} aria-hidden="true">
+          <div ref={exportRef} className={styles.exportCard}>
+            <div className={styles.exportCardHeader}>
+              <div>
+                <p className={styles.exportEyebrow}>Bill Splitter</p>
+                <h2 className={styles.exportTitle}>Bill Summary</h2>
+              </div>
+              <div className={styles.exportGrandTotal}>
+                <span className={styles.exportGrandLabel}>Total</span>
+                <span className={styles.exportGrandValue}>
+                  {formatCents(grandTotal)}
+                </span>
+              </div>
+            </div>
+
+            <div className={styles.exportTotals}>
+              <div className={styles.exportTotalRow}>
+                <span>Subtotal</span>
+                <span>{formatCents(subtotal)}</span>
+              </div>
+              <div className={styles.exportTotalRow}>
+                <span>Tax</span>
+                <span>{formatCents(taxAmount)}</span>
+              </div>
+              <div className={styles.exportTotalRow}>
+                <span>Tip</span>
+                <span>{formatCents(tipCents)}</span>
+              </div>
+              <div className={styles.exportTotalRow}>
+                <span>People</span>
+                <span>{breakdowns.length}</span>
+              </div>
+            </div>
+
+            <div className={styles.exportPeopleHeader}>
+              <span>Per person</span>
+              <span>Amount</span>
+            </div>
+
+            <div className={styles.exportPeopleList}>
+              {breakdowns.map((bd) => (
+                <div key={bd.name} className={styles.exportPersonRow}>
+                  <div className={styles.exportPersonMeta}>
+                    <span className={styles.exportPersonName}>{bd.name}</span>
+                    {bd.partySize > 1 && (
+                      <span className={styles.exportPartySize}>
+                        {bd.partySize} people
+                      </span>
+                    )}
+                  </div>
+                  <span className={styles.exportPersonAmount}>
+                    {formatCents(bd.total)}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <div className={styles.exportFooter}>
+              <span>Sum of all shares</span>
+              <span>{formatCents(sumOfShares)}</span>
+            </div>
+          </div>
         </div>
       )}
     </div>

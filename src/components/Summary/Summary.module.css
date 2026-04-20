@@ -110,6 +110,44 @@
   color: #fff;
 }
 
+/* ── Export actions ── */
+
+.exportActions {
+  margin: 12px 16px 0;
+  padding: 0 0 24px;
+  background: var(--color-surface);
+}
+
+.exportBtn {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 12px 16px;
+  background: var(--color-accent);
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.9375rem;
+  border-radius: var(--radius-md);
+  transition: background 0.15s, opacity 0.15s;
+}
+
+.exportBtn:hover:not(:disabled) {
+  background: var(--color-accent-dark);
+}
+
+.exportBtn:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.exportError {
+  margin-top: 6px;
+  font-size: 0.75rem;
+  color: var(--color-danger);
+}
+
 /* ── Bill totals ── */
 
 .billTotals {
@@ -288,5 +326,152 @@
   background: var(--color-success-light);
   color: var(--color-success);
   border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+}
+
+/* ── Hidden export image ── */
+
+.exportCanvas {
+  position: fixed;
+  top: 0;
+  left: -10000px;
+  pointer-events: none;
+}
+
+.exportCard {
+  width: 720px;
+  padding: 28px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: 20px;
+  box-shadow: var(--shadow-md);
+}
+
+.exportCardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.exportEyebrow {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.exportTitle {
+  margin-top: 6px;
+  font-size: 1.875rem;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+}
+
+.exportGrandTotal {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.exportGrandLabel {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-muted);
+}
+
+.exportGrandValue {
+  font-size: 2rem;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--color-accent-dark);
+}
+
+.exportTotals {
+  margin-top: 24px;
+  padding: 14px 16px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 20px;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+}
+
+.exportTotalRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.95rem;
+  font-family: var(--font-mono);
+}
+
+.exportPeopleHeader {
+  margin-top: 24px;
+  padding-bottom: 10px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.exportPeopleList {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+}
+
+.exportPersonRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.exportPersonMeta {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.exportPersonName {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.exportPartySize {
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+}
+
+.exportPersonAmount {
+  flex-shrink: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  font-family: var(--font-mono);
+}
+
+.exportFooter {
+  margin-top: 18px;
+  padding-top: 18px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid var(--color-border);
+  font-size: 0.95rem;
+  font-weight: 600;
   font-family: var(--font-mono);
 }
