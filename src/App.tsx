@@ -66,6 +66,7 @@ export default function App() {
           <BillEntry
             items={bill.state.items}
             onAddItem={bill.addItem}
+            onAddItems={bill.addItems}
             onUpdateItem={bill.updateItem}
             onRemoveItem={bill.removeItem}
             onNext={() => bill.setStep('assign')}

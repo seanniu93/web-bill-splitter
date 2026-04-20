@@ -2,11 +2,13 @@ import { useState, useRef } from 'react'
 import type { BillItem } from '../../types'
 import { formatCents, parseDollarsToCents } from '../../utils/format'
 import { getBillSubtotal } from '../../utils/calculations'
+import { OcrScanner } from './OcrScanner'
 import styles from './BillEntry.module.css'
 
 interface Props {
   items: BillItem[]
   onAddItem: (name: string, price: number) => void
+  onAddItems: (items: { name: string; price: number }[]) => void
   onUpdateItem: (id: string, name: string, price: number) => void
   onRemoveItem: (id: string) => void
   onNext: () => void
@@ -15,6 +17,7 @@ interface Props {
 export function BillEntry({
   items,
   onAddItem,
+  onAddItems,
   onUpdateItem,
   onRemoveItem,
   onNext,
@@ -62,6 +65,9 @@ export function BillEntry({
 
   return (
     <div className={styles.container}>
+      {/* OCR scanner */}
+      <OcrScanner onAddItems={onAddItems} />
+
       {/* Add item form */}
       <div className={styles.addForm}>
         <input

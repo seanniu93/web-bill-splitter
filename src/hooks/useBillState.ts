@@ -39,6 +39,19 @@ export function useBillState() {
     [setState],
   )
 
+  const addItems = useCallback(
+    (entries: { name: string; price: number }[]) => {
+      const newItems: BillItem[] = entries.map((e) => ({
+        id: generateId(),
+        name: e.name,
+        price: e.price,
+        assignedTo: [],
+      }))
+      setState((s) => ({ ...s, items: [...s.items, ...newItems] }))
+    },
+    [setState],
+  )
+
   const updateItem = useCallback(
     (id: string, name: string, price: number) => {
       setState((s) => ({
@@ -140,6 +153,7 @@ export function useBillState() {
     state,
     setStep,
     addItem,
+    addItems,
     updateItem,
     removeItem,
     toggleAssignment,
