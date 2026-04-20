@@ -42,7 +42,6 @@ const SKIP_PATTERNS = [
   /\ballergy\b/i,
   /\btime\b/i,
   /\blarge\s*party\b/i,
-  /\bsurcharge\b/i,
   /\bsuggested\b/i,
   /\btip\s*guide\b/i,
   /\binput\s*type\b/i,
@@ -57,6 +56,17 @@ const SKIP_PATTERNS = [
   /\bcopies?\b/i,
   /\bmerchant\s*copy\b/i,
   /\bcustomer\s*copy\b/i,
+  /\bretain\b/i,
+  /\bstatement\b/i,
+  /\bvalidation\b/i,
+  /\border\s*(id|number)\b/i,
+  /\bticket\b/i,
+  /\bitem\s*count\b/i,
+  /\bemployee\b/i,
+  /\boperator\b/i,
+  /\bonsite\b/i,
+  /\breference\b/i,
+  /\bmethod\b/i,
 ]
 
 /**
@@ -99,11 +109,9 @@ function cleanName(raw: string): string {
 
     // Remove short (1-2 char) leading noise words likely from OCR
     // background artifacts (e.g. "er", "Te") when followed by
-    // an uppercase letter, quote, or digit. 3-char words are also
-    // stripped unless they are ALL-CAPS (preserves "ADD", "NEW", etc.
-    // but removes "Vai", "pad", "sin").
+    // an uppercase letter, quote, or digit. Only 1-2 char words are
+    // stripped — 3-char words like "All", "The" are too often real.
     name = name.replace(/^[a-zA-Z]{1,2}\s+(?=[A-Z"'0-9])/, '')
-    name = name.replace(/^(?![A-Z]{3}\b)[a-zA-Z]{3}\s+(?=[A-Z"'0-9])/, '')
   }
 
   // Remove trailing non-alphanumeric garbage first (e.g. em-dashes,

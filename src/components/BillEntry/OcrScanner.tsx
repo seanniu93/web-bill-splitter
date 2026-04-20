@@ -156,7 +156,6 @@ export function OcrScanner({ onAddItems }: Props) {
             ref={fileInputRef}
             type="file"
             accept="image/*"
-            capture="environment"
             className={styles.fileInput}
             onChange={handleFileSelect}
           />
@@ -199,7 +198,6 @@ export function OcrScanner({ onAddItems }: Props) {
                 ref={fileInputRef}
                 type="file"
                 accept="image/*"
-                capture="environment"
                 className={styles.fileInput}
                 onChange={handleFileSelect}
               />
@@ -289,7 +287,6 @@ export function OcrScanner({ onAddItems }: Props) {
                 ref={fileInputRef}
                 type="file"
                 accept="image/*"
-                capture="environment"
                 className={styles.fileInput}
                 onChange={handleFileSelect}
               />
