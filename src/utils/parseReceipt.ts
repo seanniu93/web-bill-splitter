@@ -11,7 +11,7 @@ export interface ParsedItem {
  * excluded from parsed results. Applied to the text BEFORE the price.
  */
 const SKIP_PATTERNS = [
-  /\bsubtotal\b/i,
+  /\bsubtotal?\b/i,
   /\bsub\s*total\b/i,
   /\btotal\b/i,
   /\btax\b/i,
@@ -41,19 +41,38 @@ const SKIP_PATTERNS = [
   /\bapplication\b/i,
   /\ballergy\b/i,
   /\btime\b/i,
+  /\blarge\s*party\b/i,
+  /\bsurcharge\b/i,
+  /\bsuggested\b/i,
+  /\btip\s*guide\b/i,
+  /\binput\s*type\b/i,
+  /\bterminal\b/i,
+  /\bregister\b/i,
+  /\bcashier\b/i,
+  /\bpowered\s*by\b/i,
+  /\bsales\s*tax\b/i,
+  /\bgrand\s*total\b/i,
+  /\bcredit\b/i,
+  /\bamount\b/i,
+  /\bcopies?\b/i,
+  /\bmerchant\s*copy\b/i,
+  /\bcustomer\s*copy\b/i,
 ]
 
 /**
  * Regex to find a price anywhere in a line.
  *
- * Matches: $18.50, $5.00, 22.50, 22,50 (comma decimal), $1,234.50
+ * Matches: $18.50, $5.00, 18.50, 22,50 (comma decimal), $1,234.50
+ * The $ sign is optional to handle receipts that don't print it
+ * (e.g. Chick-fil-A) and OCR that misreads $ as other symbols.
+ *
  * NOT anchored to end-of-line, because OCR often produces trailing noise
  * from background textures in photos.
  *
  * We use a global regex and take the LAST match on each line (rightmost
  * price), since item prices appear on the right side of receipts.
  */
-const PRICE_RE = /\$\s*(\d{1,3}(?:,\d{3})*[.,]\d{2})\b/g
+const PRICE_RE = /[$£]?\s*(\d{1,3}(?:,\d{3})*[.,]\d{1,2})\b/g
 
 /**
  * Clean up an item name extracted from OCR text.
@@ -68,32 +87,37 @@ function cleanName(raw: string): string {
   for (let i = 0; i < 4 && name !== prev; i++) {
     prev = name
 
-    // Remove leading non-alphanumeric OCR garbage (keep quotes and !)
-    name = name.replace(/^[^a-zA-Z0-9"'"!]+/, '')
+    // Remove leading non-alphanumeric OCR garbage (keep quotes, !, +, [)
+    name = name.replace(/^[^a-zA-Z0-9"'"!+\[]+/, '')
 
     // Remove single letter followed by non-word garbage, e.g. "e——"
     name = name.replace(/^[a-zA-Z][^a-zA-Z0-9\s]+\s*/, '')
 
-    // Remove leading quantity prefix: "1 ", "2 ", "1x ", etc.
+    // Remove leading quantity prefix: "1 ", "2 ", "1x ", "x1 ", etc.
     name = name.replace(/^\d+\s*[xX×]?\s+/, '')
+    name = name.replace(/^[xX]\d+\s+/, '')
 
-    // Remove short (1-3 char) leading noise words likely from OCR
-    // background artifacts (e.g. "er", "Te", "Vai") when followed by
-    // an uppercase letter, quote, or digit (indicating a real item
-    // name starts after). Won't match "NEW!" because "!" isn't a space.
-    name = name.replace(/^[a-zA-Z]{1,3}\s+(?=[A-Z"'0-9])/, '')
+    // Remove short (1-2 char) leading noise words likely from OCR
+    // background artifacts (e.g. "er", "Te") when followed by
+    // an uppercase letter, quote, or digit. 3-char words are also
+    // stripped unless they are ALL-CAPS (preserves "ADD", "NEW", etc.
+    // but removes "Vai", "pad", "sin").
+    name = name.replace(/^[a-zA-Z]{1,2}\s+(?=[A-Z"'0-9])/, '')
+    name = name.replace(/^(?![A-Z]{3}\b)[a-zA-Z]{3}\s+(?=[A-Z"'0-9])/, '')
   }
 
   // Remove trailing non-alphanumeric garbage first (e.g. em-dashes,
   // underscores from OCR) so the short-word cleanup can see the real end.
-  name = name.replace(/[^a-zA-Z0-9"')!]+$/, '')
+  name = name.replace(/[^a-zA-Z0-9"')!\]]+$/, '')
 
   // Remove trailing separators (dots, dashes, colons)
   name = name.replace(/[\s.\-_:]+$/, '')
 
-  // Remove trailing short noise words (OCR background artifacts like
-  // "AL", "oF", "pw" that appear after item text)
+  // Remove trailing short noise: 1-2 letter words, single digits,
+  // or mixed noise like "&y", "<Q", "@m" from handwriting/background.
   name = name.replace(/\s+[A-Za-z]{1,2}$/, '')
+  name = name.replace(/\s+\d$/, '')
+  name = name.replace(/\s+[^a-zA-Z0-9\s]{1,2}[a-zA-Z]?$/, '')
 
   return name.trim()
 }
@@ -119,6 +143,33 @@ function isPlausibleOrphan(text: string): boolean {
   // Reject lines that look like dates, times, or header info
   if (/^\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}/.test(text)) return false
   if (/^\d{1,2}:\d{2}/.test(text)) return false
+
+  return true
+}
+
+/**
+ * Determine whether a price match on a line is likely a real item price
+ * rather than a date, time, address number, or other false positive.
+ * This is especially important when the $ sign is optional.
+ */
+function isLikelyPrice(
+  line: string,
+  matchIndex: number,
+  hasDollarSign: boolean,
+): boolean {
+  // If it has a $ sign, it's very likely a price
+  if (hasDollarSign) return true
+
+  // Without $, reject if the line looks like a date/time/address
+  if (/\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}/.test(line)) return false
+  if (/\d{1,2}:\d{2}/.test(line)) return false
+
+  // Reject if the number appears at the very start (likely an address)
+  if (matchIndex < 3) return false
+
+  // Reject common false positive patterns (phone numbers, zip codes, etc.)
+  if (/\d{3}[.-]\d{3}[.-]\d{4}/.test(line)) return false
+  if (/\b\d{5}\b/.test(line) && !/\.\d{2}/.test(line.slice(matchIndex))) return false
 
   return true
 }
@@ -166,15 +217,34 @@ export function parseReceipt(text: string): ParsedItem[] {
     }
 
     const lastMatch = matches[matches.length - 1]
-    const priceRaw = lastMatch[1].replace(/,/g, '.')
+    const fullMatch = lastMatch[0]
+    const hasDollarSign = /[$£]/.test(fullMatch)
+    const matchIndex = lastMatch.index ?? 0
+
+    // Validate the price match (especially important without $ sign)
+    if (!isLikelyPrice(line, matchIndex, hasDollarSign)) {
+      continue
+    }
+
+    let priceRaw = lastMatch[1].replace(/,/g, '.')
+    // Normalize single-decimal prices (e.g. "16.5" from OCR misread of "16.50")
+    if (/\.\d$/.test(priceRaw)) {
+      priceRaw += '0'
+    }
     const priceDollars = parseFloat(priceRaw)
-    if (isNaN(priceDollars) || priceDollars <= 0) {
+    if (isNaN(priceDollars) || priceDollars < 0) {
       orphanText = ''
       continue
     }
 
+    // Sanity check: reject unreasonably high prices (likely OCR false
+    // positives, e.g. "914.90" from garbled "$14.95")
+    if (priceDollars > 500) {
+      continue
+    }
+
     // Everything before the price match is the item name
-    const nameEnd = lastMatch.index ?? 0
+    const nameEnd = matchIndex
     const rawName = line.slice(0, nameEnd)
 
     // Check skip patterns on the name portion (not the whole line with noise)
@@ -198,6 +268,12 @@ export function parseReceipt(text: string): ParsedItem[] {
 
     if (!name) {
       orphanText = ''
+      continue
+    }
+
+    // Reject items with very short names (≤2 chars) — likely OCR
+    // garbage from garbled skip-pattern lines like "Tax" → "Lo"
+    if (name.replace(/[^a-zA-Z]/g, '').length < 3) {
       continue
     }
 

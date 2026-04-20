@@ -7,5 +7,5 @@ tsconfig.tsbuildinfo
 # Tesseract.js language data (downloaded at runtime)
 *.traineddata
 
-# Test scripts
-test-ocr.mjs
+# Temporary/scratch files
+tmp/
