@@ -1,0 +1,253 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+/* ── Add form ── */
+
+.addForm {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-border-light);
+  background: var(--color-bg);
+}
+
+.nameInput {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 0.9375rem;
+  background: var(--color-surface);
+  transition: border-color 0.15s;
+}
+
+.nameInput:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.priceInputWrap {
+  position: relative;
+  width: 90px;
+  flex-shrink: 0;
+}
+
+.dollarSign {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-text-muted);
+  font-size: 0.9375rem;
+  pointer-events: none;
+}
+
+.priceInput,
+.editPriceInput {
+  width: 100%;
+  padding: 10px 12px 10px 24px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 0.9375rem;
+  font-family: var(--font-mono);
+  background: var(--color-surface);
+  text-align: right;
+  transition: border-color 0.15s;
+}
+
+.priceInput:focus,
+.editPriceInput:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.addBtn {
+  padding: 10px 16px;
+  background: var(--color-accent);
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.875rem;
+  border-radius: var(--radius-sm);
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+
+.addBtn:hover:not(:disabled) {
+  background: var(--color-accent-dark);
+}
+
+.addBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ── Item list ── */
+
+.list {
+  list-style: none;
+  flex: 1;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.rowBody {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 4px 12px 16px;
+  min-height: 48px;
+  text-align: left;
+}
+
+.rowBody:active {
+  background: var(--color-bg);
+}
+
+.itemName {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  margin-right: 12px;
+}
+
+.itemPrice {
+  font-size: 0.9375rem;
+  font-family: var(--font-mono);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.deleteBtn {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+  transition: color 0.15s;
+}
+
+.deleteBtn:hover {
+  color: var(--color-danger);
+}
+
+/* ── Inline edit ── */
+
+.editRow {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--color-border-light);
+  background: var(--color-accent-light);
+}
+
+.editNameInput {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  background: var(--color-surface);
+}
+
+.editNameInput:focus {
+  outline: none;
+}
+
+.editRow .priceInputWrap {
+  width: 80px;
+}
+
+.saveBtn,
+.cancelBtn {
+  padding: 6px 10px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+}
+
+.saveBtn {
+  background: var(--color-accent);
+  color: #fff;
+}
+
+.cancelBtn {
+  color: var(--color-text-secondary);
+}
+
+/* ── Empty ── */
+
+.empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 16px;
+}
+
+.emptyText {
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.emptyHint {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  margin-top: 4px;
+}
+
+/* ── Footer ── */
+
+.footer {
+  padding: 12px 16px;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
+  position: sticky;
+  bottom: 0;
+}
+
+.subtotal {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  margin-bottom: 10px;
+}
+
+.subtotalAmount {
+  font-family: var(--font-mono);
+}
+
+.nextBtn {
+  width: 100%;
+  padding: 12px;
+  background: var(--color-accent);
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.9375rem;
+  border-radius: var(--radius-md);
+  transition: background 0.15s;
+}
+
+.nextBtn:hover:not(:disabled) {
+  background: var(--color-accent-dark);
+}
+
+.nextBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
