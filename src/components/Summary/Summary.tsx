@@ -47,11 +47,6 @@ export function Summary({
       : centsToStr(tipAmount),
   )
 
-  // Reset tip string when tipMode changes (the toggle already sets tipAmount=0)
-  useEffect(() => {
-    setTipStr('')
-  }, [tipMode])
-
   // Sync local tax string if the parent value changes externally (e.g. restore from localStorage)
   useEffect(() => {
     setTaxStr(centsToStr(taxAmount))
@@ -218,6 +213,7 @@ export function Summary({
               <button
                 className={`${styles.toggleBtn} ${tipMode === 'percentage' ? styles.toggleActive : ''}`}
                 onClick={() => {
+                  setTipStr('')
                   onSetTipAmount(0)
                   onSetTipMode('percentage')
                 }}
@@ -227,6 +223,7 @@ export function Summary({
               <button
                 className={`${styles.toggleBtn} ${tipMode === 'amount' ? styles.toggleActive : ''}`}
                 onClick={() => {
+                  setTipStr('')
                   onSetTipAmount(0)
                   onSetTipMode('amount')
                 }}
