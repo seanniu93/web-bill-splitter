@@ -44,7 +44,15 @@ const SKIP_PATTERNS = [
   /\blarge\s*party\b/i,
   /\bsuggested\b/i,
   /\btip\s*guide\b/i,
+  /\bguide\s+(below|is|provided)\b/i,
+  /\bconvenience\b/i,
   /\binput\s*type\b/i,
+  // Tip-guide percentage rows like "18% - 47.83" / "20% — 53.15" /
+  // "22% ~ 58.46". Anchored to end-of-rawName (price already stripped)
+  // so it still matches lines with OCR noise prefix, e.g.
+  // "il i 18% - $33.02" → rawName is "il i 18% - ", the pattern
+  // matches the trailing "18% -".
+  /\b\d{1,2}\s*%\s*[-–—~]\s*$/,
   /\bterminal\b/i,
   /\bregister\b/i,
   /\bcashier\b/i,
@@ -262,6 +270,15 @@ export function parseReceipt(text: string): ParsedItem[] {
     }
 
     let name = cleanName(rawName)
+
+    // If the pre-price text has NO alphabetic characters at all, the
+    // line is almost certainly a numeric-only noise row (tip guide
+    // "18% - 47.83", totals, phone/address fragments, etc). Merging
+    // orphan text here fabricates phantom items — skip the line.
+    if (!/[a-zA-Z]/.test(rawName)) {
+      orphanText = ''
+      continue
+    }
 
     // Merge orphan text only if the current name is very short (≤1 real
     // word), suggesting it's a continuation of a multi-line item name.
