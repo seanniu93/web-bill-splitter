@@ -69,6 +69,9 @@ export default function App() {
             onAddItems={bill.addItems}
             onUpdateItem={bill.updateItem}
             onRemoveItem={bill.removeItem}
+            onSetTaxAmount={bill.setTaxAmount}
+            onSetTipAmount={bill.setTipAmount}
+            onSetTipMode={bill.setTipMode}
             onNext={() => bill.setStep('assign')}
           />
         )}

@@ -4,6 +4,24 @@
   flex: 1;
 }
 
+/* ── Import row (OCR + LLM, side-by-side if width allows) ── */
+
+.importRow {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.importRow > * {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+
+/* When either child expands beyond its idle button, it takes the
+   full row. The idle sibling wraps onto the next line. */
+.importRow > [data-expanded='true'] {
+  flex-basis: 100%;
+}
+
 /* ── Add form ── */
 
 .addForm {

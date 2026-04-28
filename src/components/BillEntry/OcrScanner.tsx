@@ -154,12 +154,15 @@ export function OcrScanner({ onAddItems }: Props) {
       : 0
 
   return (
-    <div className={styles.container}>
+    <div
+      className={styles.container}
+      data-expanded={state.phase !== 'idle' ? 'true' : undefined}
+    >
       {/* Idle: show scan button */}
       {state.phase === 'idle' && (
         <label className={styles.scanBtn}>
           <span className={styles.scanIcon}>&#x1F4F7;</span>
-          Scan receipt <span className={styles.betaTag}>(Beta)</span>
+          Scan receipt
           <input
             ref={fileInputRef}
             type="file"

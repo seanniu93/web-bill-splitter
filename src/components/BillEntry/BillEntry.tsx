@@ -1,8 +1,9 @@
 import { useState, useRef } from 'react'
-import type { BillItem } from '../../types'
+import type { BillItem, TipMode } from '../../types'
 import { formatCents, parseDollarsToCents } from '../../utils/format'
 import { getBillSubtotal } from '../../utils/calculations'
 import { OcrScanner } from './OcrScanner'
+import { LlmImport } from './LlmImport'
 import styles from './BillEntry.module.css'
 
 interface Props {
@@ -11,6 +12,9 @@ interface Props {
   onAddItems: (items: { name: string; price: number }[]) => void
   onUpdateItem: (id: string, name: string, price: number) => void
   onRemoveItem: (id: string) => void
+  onSetTaxAmount: (cents: number) => void
+  onSetTipAmount: (value: number) => void
+  onSetTipMode: (mode: TipMode) => void
   onNext: () => void
 }
 
@@ -20,6 +24,9 @@ export function BillEntry({
   onAddItems,
   onUpdateItem,
   onRemoveItem,
+  onSetTaxAmount,
+  onSetTipAmount,
+  onSetTipMode,
   onNext,
 }: Props) {
   const [name, setName] = useState('')
@@ -65,8 +72,18 @@ export function BillEntry({
 
   return (
     <div className={styles.container}>
-      {/* OCR scanner */}
-      <OcrScanner onAddItems={onAddItems} />
+      {/* Receipt import (OCR + LLM). Flows side-by-side when space
+          allows, stacks otherwise. Whichever is active expands to
+          full width via the :has() selector in the stylesheet. */}
+      <div className={styles.importRow}>
+        <OcrScanner onAddItems={onAddItems} />
+        <LlmImport
+          onAddItems={onAddItems}
+          onSetTaxAmount={onSetTaxAmount}
+          onSetTipAmount={onSetTipAmount}
+          onSetTipMode={onSetTipMode}
+        />
+      </div>
 
       {/* Add item form */}
       <div className={styles.addForm}>
