@@ -67,12 +67,19 @@ const SKIP_PATTERNS: RegExp[] = [
   // `subtotal?` (the `?` being a regex modifier on the "l") is
   // intentional — OCR frequently reads "Subtotal" as "Subtota)" when
   // the trailing "l" is mistaken for ")". Matching with the "l"
-  // optional catches both forms.
-  /\bsub\s*totals?\b/i,
+  // optional catches both forms. `sub[\s.]*` also accepts "Sub. Total".
+  /\bsub[\s.]*totals?\b/i,
   /\bsubtotal?\b/i,
   /\btotals?\b/i,
-  /\btota\)/i,
+  // Common OCR mangles of "Total" on noisy receipts ("Tore" for
+  // "Total", "Tota)" when the "l" is read as ")", "Totol" …).
+  /\btota[)l]?\b/i,
+  /\btore\b/i,
+  /\btotol\b/i,
   /\btax\b/i,
+  // Same idea for "Tax" → "lax" when the capital T's left stroke
+  // gets dropped and an "l" emerges.
+  /\blax\b/i,
   /\btip\b/i,
   /\bgratuity\b/i,
   /\bchange\b/i,
@@ -143,6 +150,12 @@ const SKIP_PATTERNS: RegExp[] = [
 // frequently glues a tax-flag "T" onto the price token).
 const PRICE_TOKEN_RE =
   /^[$£(]?\s*(\d{1,3}(?:,\d{3})*[.,]\d{1,2})[)$}\]]?[A-Za-z]{0,2}$/
+
+// Matches a "partial price" where OCR ate the cents digits: "$0.",
+// "$5.", "$15.". Accepted only when the token sits in the price
+// column and no regular price token is present on the line. Treated
+// as "$N.00".
+const PARTIAL_PRICE_RE = /^[$£]?\d{1,3}\.$/
 
 // ── Word fusion ──
 
@@ -261,6 +274,23 @@ function parsePriceTextWithFallback(raw: string): number | null {
   return direct
 }
 
+/** Was this token's parsed value produced by the leading-digit-drop
+ * fallback path? We track this so the main loop can prefer an
+ * orphan-price from an adjacent row over a fallback-rescued value. */
+function parseCameFromFallback(raw: string): boolean {
+  const direct = parsePriceText(raw)
+  if (direct == null || direct <= 50000) return false
+  for (let drop = 1; drop <= 2; drop++) {
+    const m = raw.match(/^([$£(]?)(\d+)([.,]\d{1,2}.*)$/)
+    if (!m) break
+    if (m[2].length <= drop) break
+    const shortened = m[1] + m[2].slice(drop) + m[3]
+    const alt = parsePriceText(shortened)
+    if (alt !== null && alt <= 50000 && alt > 0) return true
+  }
+  return false
+}
+
 // ── Price-column detection ──
 
 interface PriceColumn {
@@ -300,31 +330,48 @@ interface PriceInfo {
   index: number
   inCol: boolean
   fromQtyUnit?: boolean
+  fromFallback?: boolean
+  fromRescue?: boolean
 }
 
-/** Rightmost price-shaped token on a line. Prefers price-column matches. */
+/** Rightmost price-shaped token on a line. Prefers price-column matches.
+ * Also accepts "partial" prices in the price column (e.g. "$0." where
+ * the cents got eaten) as a last-resort fallback. */
 function findLinePrice(
   fusedWords: OcrWord[],
   priceCol: PriceColumn | null,
 ): PriceInfo | null {
   let best: PriceInfo | null = null
+  let partialBest: PriceInfo | null = null
   for (let i = 0; i < fusedWords.length; i++) {
     const w = fusedWords[i]
-    if (!PRICE_TOKEN_RE.test(w.text)) continue
-    const cents = parsePriceTextWithFallback(w.text)
-    if (cents == null) continue
-    // Reject out-of-range tokens that weren't rescued by the fallback.
-    if (cents > 50000) continue
-    const inCol = !priceCol || w.bbox.x1 >= priceCol.min
-    if (
-      !best ||
-      (inCol && !best.inCol) ||
-      (inCol === best.inCol && w.bbox.x0 > best.token.bbox.x0)
-    ) {
-      best = { token: w, cents, index: i, inCol }
+    if (PRICE_TOKEN_RE.test(w.text)) {
+      const cents = parsePriceTextWithFallback(w.text)
+      if (cents == null) continue
+      if (cents > 50000) continue
+      const inCol = !priceCol || w.bbox.x1 >= priceCol.min
+      const fromFallback = parseCameFromFallback(w.text)
+      if (
+        !best ||
+        (inCol && !best.inCol) ||
+        (inCol === best.inCol && w.bbox.x0 > best.token.bbox.x0)
+      ) {
+        best = { token: w, cents, index: i, inCol, fromFallback }
+      }
+    } else if (PARTIAL_PRICE_RE.test(w.text)) {
+      // Only trust partial prices inside the price column (mid-line
+      // decimals with no cents usually aren't prices at all).
+      const inCol = !!priceCol && w.bbox.x1 >= priceCol.min
+      if (!inCol) continue
+      const digits = w.text.replace(/[^\d]/g, '')
+      if (!digits) continue
+      const cents = parseInt(digits, 10) * 100
+      if (!partialBest || w.bbox.x0 > partialBest.token.bbox.x0) {
+        partialBest = { token: w, cents, index: i, inCol }
+      }
     }
   }
-  return best
+  return best ?? partialBest
 }
 
 interface QtyUnit {
@@ -365,6 +412,14 @@ function cleanName(raw: string): string {
     // Leading 1–2 char noise word before a capital/quote/digit.
     n = n.replace(/^[a-zA-Z]{1,2}\s+(?=[A-Z"'0-9])/, '')
   }
+  // Strip leading 1-2 digits glued to a ≥3-letter word
+  // ("40ysters" → "Oysters" when digits=="0"; otherwise drop digits).
+  // Covers the common O↔0 misread pattern.
+  n = n.replace(/\b(\d{1,2})([a-zA-Z]{3,})\b/g, (_m, digits: string, word: string) => {
+    if (digits === '0') return 'O' + word
+    if (/^(nd|st|rd|th)$/i.test(word)) return digits + word
+    return word
+  })
   n = n.replace(/[^a-zA-Z0-9"')!\]]+$/, '')
   n = n.replace(/[\s.\-_:]+$/, '')
   n = n.replace(/\s+[xX]\s*$/, '')
@@ -386,18 +441,25 @@ function hasAlpha(s: string): boolean {
 /**
  * Look up the rightmost price-column token on the rescue pass for the
  * given y-midpoint. Returns cents or null if no suitable token exists.
+ *
+ * @param tightY  When true, require <½ line-height y-alignment. Used
+ *                by the rescue-fallback path (a row that had no main
+ *                -pass price trying to borrow one) to avoid grabbing
+ *                a noise token from an adjacent row.
  */
 function rescuePriceAt(
   lineYMid: number,
   rescueLines: OcrLine[],
   priceCol: PriceColumn | null,
+  tightY = false,
 ): number | null {
   if (rescueLines.length === 0) return null
   let best: { word: OcrWord; cents: number } | null = null
   for (const rLine of rescueLines) {
     const yMid = (rLine.bbox.y0 + rLine.bbox.y1) / 2
     const h = rLine.bbox.y1 - rLine.bbox.y0
-    if (Math.abs(yMid - lineYMid) > h) continue
+    const tol = tightY ? h * 0.5 : h
+    if (Math.abs(yMid - lineYMid) > tol) continue
     const fused = fuseNumberWords(rLine.words)
     for (const w of fused) {
       if (!PRICE_TOKEN_RE.test(w.text)) continue
@@ -447,15 +509,39 @@ export function parseReceiptV2(cached: CachedOcr): ParsedItem[] {
     }
   })
 
+  // Identify the y-range of the "item region" (first priced row to the
+  // row just above the first totals/skip row). The rescue-fallback
+  // path below uses this to reject header/footer rows that happen to
+  // y-align with rescue-pass tokens on noisy receipts.
+  let itemYStart = Infinity
+  let itemYEnd = -Infinity
+  for (const r of rows) {
+    if (r.priceInfo && r.lineText) {
+      if (SKIP_PATTERNS.some((p) => p.test(r.lineText))) {
+        itemYEnd = r.yMid - 1
+        break
+      }
+      if (r.yMid < itemYStart) itemYStart = r.yMid
+      itemYEnd = r.yMid
+    }
+  }
+
   const results: ParsedItem[] = []
   let orphanText = ''
+  // A price emitted on its own row (valid price in the price column,
+  // no real words in the name portion). If the NEXT item row has a
+  // low-confidence (fallback-derived) price, we prefer the orphan
+  // price — the fallback is inherently less reliable. This handles
+  // receipts like IMG_2525 where each item is split across two
+  // Tesseract lines with the price appearing above its name.
+  let orphanPrice: number | null = null
 
   for (let rIdx = 0; rIdx < rows.length; rIdx++) {
     const r = rows[rIdx]
 
-    // Synthesize a priceInfo from qty×unit when the rightmost token
-    // looks like a digit-only "price" (Tesseract dropped the decimal),
-    // e.g. "Cheesy Bread 7.28x1 $7287" → use 7.28 × 1 = $7.28.
+    // Fallback 1: qty×unit. When Tesseract dropped the decimal on the
+    // line total but kept it on the unit price ("Cheesy Bread 7.28x1
+    // $7287"), synthesize a priceInfo from qtyUnit.
     if (!r.priceInfo && r.qtyUnit && r.fused.length > 0) {
       const rightWord = r.fused[r.fused.length - 1]
       if (/^[$£]?\d{3,5}[A-Za-z]?$/.test(rightWord.text)) {
@@ -465,6 +551,34 @@ export function parseReceiptV2(cached: CachedOcr): ParsedItem[] {
           index: r.fused.length - 1,
           inCol: !priceCol || rightWord.bbox.x1 >= priceCol.min,
           fromQtyUnit: true,
+        }
+      }
+    }
+
+    // Fallback 2: rescue-pass lookup. When the main pass has neither a
+    // price token nor a qty-unit pattern but the row has enough real
+    // words to be a plausible item name, borrow a price from the
+    // rescue pass at the same y. Tight y-alignment + item-region
+    // scope + ≥2-real-words filter keep this from firing on
+    // header/footer noise on receipts with bad OCR (IMG_6431).
+    if (
+      !r.priceInfo &&
+      r.lineText &&
+      !SKIP_PATTERNS.some((p) => p.test(r.lineText)) &&
+      r.yMid >= itemYStart &&
+      r.yMid <= itemYEnd
+    ) {
+      const cleaned = cleanName(r.lineText)
+      if (realWordCount(cleaned) >= 2) {
+        const rescued = rescuePriceAt(r.yMid, rescueLines, priceCol, true)
+        if (rescued != null && rescued > 0 && rescued <= 50000) {
+          r.priceInfo = {
+            token: { text: '', bbox: { x0: 0, y0: 0, x1: 0, y1: 0 } },
+            cents: rescued,
+            index: r.fused.length,
+            inCol: true,
+            fromRescue: true,
+          }
         }
       }
     }
@@ -496,6 +610,24 @@ export function parseReceiptV2(cached: CachedOcr): ParsedItem[] {
 
     if (SKIP_PATTERNS.some((p) => p.test(rawName))) {
       orphanText = ''
+      orphanPrice = null
+      continue
+    }
+
+    // If this row has a valid price but no real words in its name
+    // portion (e.g. "es $32.00" on IMG_2525), treat it as an "orphan
+    // price" the next item row can consume if its own price turned
+    // out to be fallback-rescued. Don't emit this row as an item.
+    // Skip the branch if an orphan name is already pending — that's
+    // a multi-line wrap (IMG_0467 "Chicken Karaage (Legs)" wraps its
+    // price onto a separate line) which should be emitted as an item.
+    if (
+      !r.priceInfo.fromQtyUnit &&
+      !r.priceInfo.fromRescue &&
+      !orphanText &&
+      realWordCount(cleanName(rawName)) === 0
+    ) {
+      orphanPrice = r.priceInfo.cents
       continue
     }
 
@@ -524,6 +656,15 @@ export function parseReceiptV2(cached: CachedOcr): ParsedItem[] {
     ) {
       priceCents = rescued
     }
+
+    // If this row's price came via the leading-digit-drop fallback
+    // (i.e. direct parse was >$500), and a previous row left us an
+    // orphan price, prefer the orphan. Fallback is inherently low-
+    // confidence — using an adjacent clean price is more reliable.
+    if (r.priceInfo.fromFallback && orphanPrice != null) {
+      priceCents = orphanPrice
+    }
+    orphanPrice = null
 
     // Sanity bounds.
     if (priceCents < 0) {
