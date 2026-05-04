@@ -1,6 +1,11 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
-import type { Worker } from 'tesseract.js'
-import { parseReceipt, type ParsedItem } from '../../utils/parseReceipt'
+import type { ParsedItem } from '../../utils/parseReceipt'
+import { parseReceiptV2 } from '../../utils/parseReceiptV2'
+import {
+  recognizeReceipt,
+  disposeOcrEngine,
+  type OcrProgress,
+} from '../../utils/ocrEngine'
 import styles from './OcrScanner.module.css'
 
 interface Props {
@@ -16,13 +21,14 @@ type ScanState =
 export function OcrScanner({ onAddItems }: Props) {
   const [state, setState] = useState<ScanState>({ phase: 'idle' })
   const [imagePreview, setImagePreview] = useState<string | null>(null)
-  const workerRef = useRef<Worker | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Cleanup worker on unmount
+  // Cleanup OCR workers on unmount.
   useEffect(() => {
     return () => {
-      workerRef.current?.terminate()
+      // Fire-and-forget — we don't need to wait for teardown during
+      // unmount, but we do need to stop any active workers.
+      void disposeOcrEngine()
     }
   }, [])
 
@@ -31,61 +37,24 @@ export function OcrScanner({ onAddItems }: Props) {
       const file = e.target.files?.[0]
       if (!file) return
 
-      // Show image preview
+      // Show image preview.
       const previewUrl = URL.createObjectURL(file)
       setImagePreview(previewUrl)
 
       setState({ phase: 'loading', status: 'Loading OCR engine...', progress: 0 })
 
       try {
-        // Lazy-load tesseract.js and create worker on first use
-        if (!workerRef.current) {
-          const { createWorker } = await import('tesseract.js')
-          workerRef.current = await createWorker('eng', 1, {
-            logger: (m) => {
-              if (m.status === 'recognizing text') {
-                setState({
-                  phase: 'loading',
-                  status: 'Recognizing text...',
-                  progress: Math.round(m.progress * 100),
-                })
-              } else if (m.status === 'loading language traineddata') {
-                setState({
-                  phase: 'loading',
-                  status: 'Downloading language data...',
-                  progress: Math.round(m.progress * 100),
-                })
-              }
-            },
-          })
-          // Blacklist currency/typography glyphs that never appear on US
-          // restaurant receipts but are common Tesseract misreads of
-          // digits (e.g. "6" → "£", "8" → "§"). Measured on our
-          // training set: +1 item recovered, +1 price corrected, zero
-          // regressions across all other receipts.
-          await workerRef.current.setParameters({
-            tessedit_char_blacklist: '£§¥¢',
-          })
+        const onProgress = (p: OcrProgress) => {
+          setState({ phase: 'loading', status: p.status, progress: p.progress })
         }
+        const cached = await recognizeReceipt(file, onProgress)
+        const parsed = parseReceiptV2(cached)
 
-        setState({ phase: 'loading', status: 'Recognizing text...', progress: 0 })
-
-        const { data } = await workerRef.current.recognize(file)
-        const parsed = parseReceipt(data.text)
-
-        if (parsed.length === 0) {
-          setState({
-            phase: 'review',
-            items: [],
-            rawText: data.text,
-          })
-        } else {
-          setState({
-            phase: 'review',
-            items: parsed,
-            rawText: data.text,
-          })
-        }
+        setState({
+          phase: 'review',
+          items: parsed,
+          rawText: cached.main.text,
+        })
       } catch (err) {
         setState({
           phase: 'error',
@@ -93,7 +62,7 @@ export function OcrScanner({ onAddItems }: Props) {
         })
       }
 
-      // Reset file input so the same file can be re-selected
+      // Reset file input so the same file can be re-selected.
       if (fileInputRef.current) fileInputRef.current.value = ''
     },
     [],
